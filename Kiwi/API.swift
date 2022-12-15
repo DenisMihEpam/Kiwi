@@ -9,22 +9,25 @@ import Foundation
 import Combine
 import UIKit
 
-struct API {
-    /// API Errors.
-    enum Error: LocalizedError, Identifiable {
-        var id: String { localizedDescription }
-        case addressUnreachable(URL)
-        case invalidResponse
-        
-        var errorDescription: String? {
-            switch self {
-            case .invalidResponse: return "Unexpected server response."
-            case .addressUnreachable(let url): return "Server is unreachable. URL: \(url)"
-            }
+protocol Networking {
+    func flights() -> AnyPublisher<[Flight], APIError>
+    func flightImage(flight: Flight) -> AnyPublisher<Data, APIError>
+}
+
+enum APIError: LocalizedError, Identifiable {
+    var id: String { localizedDescription }
+    case addressUnreachable(URL)
+    case invalidResponse
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse: return "Unexpected server response."
+        case .addressUnreachable(let url): return "Server is unreachable. URL: \(url)"
         }
     }
-    
-    /// API endpoints.
+}
+
+struct API: Networking {
     enum EndPoint {
         case flightsURL
         case imageURL(Flight)
@@ -42,12 +45,8 @@ struct API {
         }
     }
     
-    /// Maximum number of stories to fetch (reduce for lower API strain during development).
     var maxFlights = 5
-    
-    /// A shared JSON decoder to use in calls.
     private let decoder = JSONDecoder()
-    
     private let apiQueue = DispatchQueue(label: "API",
                                          qos: .default,
                                          attributes: .concurrent)
@@ -61,20 +60,20 @@ struct API {
         
     }
     
-    func flights() -> AnyPublisher<[Flight], Error> {
+    func flights() -> AnyPublisher<[Flight], APIError> {
         let savedIDs = PersistenceController.shared.getSavedIDs()
         return urlSesion(url: EndPoint.flightsURL.url)
             .decode(type: Response.self, decoder: decoder)
-            .mapError { error -> API.Error in
+            .mapError { error -> APIError in
                 switch error {
                 case is URLError:
-                    return Error.addressUnreachable(EndPoint.flightsURL.url)
+                    return APIError.addressUnreachable(EndPoint.flightsURL.url)
                 default:
-                    return Error.invalidResponse
+                    return APIError.invalidResponse
                 }
             }
             .map{$0.data}
-            .flatMap { entities -> AnyPublisher<Flight, Error> in
+            .flatMap { entities -> AnyPublisher<Flight, APIError> in
                 Publishers.Sequence(sequence: entities).eraseToAnyPublisher()
             }
             .filter({ flight in
@@ -85,10 +84,10 @@ struct API {
             .eraseToAnyPublisher()
     }
     
-    func flightImage(flight: Flight) -> AnyPublisher<Data, Error> {
+    func flightImage(flight: Flight) -> AnyPublisher<Data, APIError> {
         return urlSesion(url: EndPoint.imageURL(flight).url)
-            .mapError { error -> API.Error in
-                return Error.addressUnreachable(EndPoint.imageURL(flight).url)
+            .mapError { error -> APIError in
+                return APIError.addressUnreachable(EndPoint.imageURL(flight).url)
             }
             .eraseToAnyPublisher()
     }

@@ -15,6 +15,7 @@ struct ContentView: View {
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \CDFlight.created, ascending: true)],
         animation: .default)
+    
     private var items: FetchedResults<CDFlight>
     @ObservedObject var contentManager: ContentManager
     
@@ -39,6 +40,9 @@ struct ContentView: View {
                       )
                     }
         }
+        .onAppear {
+            contentManager.checkUpdates()
+        }
         
     }
 
@@ -46,6 +50,6 @@ struct ContentView: View {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView(contentManager: ContentManager()).environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+        ContentView(contentManager: ContentManager(api: API(), persistenceController: PersistenceController.shared)).environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }
 }

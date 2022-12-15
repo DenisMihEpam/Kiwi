@@ -8,31 +8,28 @@
 import Foundation
 import Combine
 
-protocol ContentManaging: ObservableObject {
-    var uppdating: Bool {get}
-    var error: API.Error? {get}
-    func checkUpdates()
-}
-
-class ContentManager: ContentManaging {
+class ContentManager: ObservableObject {
     private var subscriptions = [AnyCancellable]()
-    @Published var uppdating: Bool
-    @Published var error: API.Error? = nil
+    var api: Networking
+    var persistenceController: Persistence
+    @Published var uppdating: Bool = false
+    @Published var error: APIError? = nil
     
-    private var needUpdates: Bool = {
-        guard let contentDate =  PersistenceController.shared.getLastSavedDate() else { return true}
+    private lazy var needUpdates: Bool = {
+        guard let contentDate =  persistenceController.getLastSavedDate() else { return true}
         return !Calendar.current.isDate(contentDate, inSameDayAs: Date())
     }()
     
-    init() {
-        self.uppdating = needUpdates
-        checkUpdates()
+    init(api: Networking, persistenceController: Persistence) {
+        self.api = api
+        self.persistenceController = persistenceController
     }
     
     
     func checkUpdates() {
         if needUpdates {
-            API().flights()
+            uppdating = true
+            api.flights()
                 .receive(on: DispatchQueue.main)
                 .sink(receiveCompletion: { completion in
                     if case .failure(let error) = completion {
@@ -41,10 +38,11 @@ class ContentManager: ContentManaging {
                     }
                 },
                       receiveValue: {[weak self] in
-                    PersistenceController.shared.deleteAllFlights()
-                    PersistenceController.shared.saveFlights($0)
-                    self?.uppdating = false
-                    self?.downloadImages(for: $0)
+                    guard let self = self else { return }
+                    self.persistenceController.deleteAllFlights()
+                    self.persistenceController.saveFlights($0)
+                    self.uppdating = false
+                    self.downloadImages(for: $0)
                 })
                 .store(in: &subscriptions)
         }
@@ -52,11 +50,11 @@ class ContentManager: ContentManaging {
     
     private func downloadImages(for flights: [Flight]) {
         flights.forEach { flight in
-            API().flightImage(flight: flight)
+            api.flightImage(flight: flight)
                 .receive(on: DispatchQueue.main)
                 .sink(receiveCompletion: { print($0) },
-                      receiveValue: {
-                    PersistenceController.shared.saveImage(data: $0, flight: flight)
+                      receiveValue: {[weak self] in
+                    self?.persistenceController.saveImage(data: $0, flight: flight)
                 })
                 .store(in: &subscriptions)
         }

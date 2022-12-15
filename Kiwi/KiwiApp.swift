@@ -10,7 +10,7 @@ import SwiftUI
 @main
 struct KiwiApp: App {
     let persistenceController = PersistenceController.shared
-    let contentManager = ContentManager()
+    let contentManager = ContentManager(api: API(), persistenceController: PersistenceController.shared)
     var body: some Scene {
         WindowGroup {
             ContentView(contentManager: contentManager)

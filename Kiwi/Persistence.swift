@@ -7,7 +7,15 @@
 
 import CoreData
 
-struct PersistenceController {
+protocol Persistence {
+    func saveFlights(_ flights: [Flight])
+    func getSavedIDs() -> [String]
+    func getLastSavedDate() -> Date?
+    func deleteAllFlights()
+    func saveImage(data: Data, flight: Flight)
+}
+
+struct PersistenceController: Persistence {
     static let shared = PersistenceController()
 
     static var preview: PersistenceController = {
